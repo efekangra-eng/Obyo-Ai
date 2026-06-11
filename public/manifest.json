@@ -1,0 +1,96 @@
+{
+  "id": "/?source=pwa",
+  "name": "ChartScan AI - Grafik Analiz Aracı",
+  "short_name": "ChartScan AI",
+  "description": "Yapay zeka modellerini kullanarak borsa grafik görsellerini otomatik analiz eden, teknik göstergeler çıkaran ve rateable trading sinyalleri sunan premium PWA aracı.",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "theme_color": "#051115",
+  "background_color": "#051115",
+  "categories": [
+    "finance",
+    "business",
+    "utilities"
+  ],
+  "dir": "ltr",
+  "lang": "tr-TR",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Teknik Analiz",
+      "short_name": "Analiz",
+      "description": "Anlık bir grafik görseli yükleyerek teknik analizi başlatın.",
+      "url": "/?action=analyze",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Sinyal Geçmişi",
+      "short_name": "Sinyaller",
+      "description": "Geçmiş yapay zeka grafik yönü işlemlerini ve başarı oranını kontrol edin.",
+      "url": "/?action=history",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "420x920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "ChartScan AI Mobil Arayüzü"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1000x600",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "ChartScan AI Masaüstü Tasarımı"
+    }
+  ],
+  "prefer_related_applications": false
+}

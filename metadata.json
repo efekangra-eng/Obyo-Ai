@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: ChartScan AI",
+  "description": "Premium PWA that analyzes chart images, applies indicators automatically, and provides rateable 5-minute \"up or down\" trading signals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
