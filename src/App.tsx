@@ -232,7 +232,8 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           image: payloadString,
-          mockResponse: false // Force remote API first, falls back gracefully anyway
+          mockResponse: false, // Force remote API first, falls back gracefully anyway
+          isSample: !!selectedSample
         }),
       });
 

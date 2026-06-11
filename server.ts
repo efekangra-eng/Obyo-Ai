@@ -14,32 +14,43 @@ const PORT = 3000;
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Initialize Gemini Client
-const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY_SECONDARY || process.env.GEMINI_API_KEYy;
-let aiClient: GoogleGenAI | null = null;
-
-if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim() !== "") {
+// Initialize Specialized Gemini Clients for each AI Agent
+const getClient = (specificKey: string | undefined, fallbacks: (string | undefined)[]) => {
+  const key = [specificKey, ...fallbacks].find(k => k && k !== "MY_GEMINI_API_KEY" && k.trim() !== "");
+  if (!key) return null;
   try {
-    aiClient = new GoogleGenAI({
-      apiKey: apiKey,
+    return new GoogleGenAI({
+      apiKey: key,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
         }
       }
     });
-    console.log("Gemini API Client successfully initialized.");
   } catch (error) {
-    console.error("Failed to initialize Gemini Client:", error);
+    console.error("Failed to initialize specialized Gemini Client:", error);
+    return null;
   }
+};
+
+const trendClient = getClient(process.env.GEMINI_API_KEY_TREND, [process.env.GEMINI_API_KEY_PRIMARY, process.env.GEMINI_API_KEY]);
+const momentumClient = getClient(process.env.GEMINI_API_KEY_MOMENTUM, [process.env.GEMINI_API_KEY_SECONDARY, process.env.GEMINI_API_KEY]);
+const volumeClient = getClient(process.env.GEMINI_API_KEY_VOLUME, [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_PRIMARY, process.env.GEMINI_API_KEY_SECONDARY]);
+
+if (trendClient || momentumClient || volumeClient) {
+  console.log("Specialized Gemini AI Clients fully initialized:", {
+    trendAgent: trendClient ? "ACTIVE (Real Key)" : "FALLBACK",
+    momentumAgent: momentumClient ? "ACTIVE (Real Key)" : "FALLBACK",
+    volumeAgent: volumeClient ? "ACTIVE (Real Key)" : "FALLBACK"
+  });
 } else {
-  console.log("No GEMINI_API_KEY found or standard placeholder is present. Using smart offline analysis fallback.");
+  console.log("No active GEMINI_API_KEY found or standard placeholders are present. Using smart offline analysis consensus fallback.");
 }
 
 // 1. Chart Analysis Endpoint
 app.post("/api/analyze-chart", async (req, res) => {
   try {
-    const { image, mockResponse } = req.body;
+    const { image, mockResponse, isSample } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: "Resim verisi bulunamadı." });
@@ -158,7 +169,17 @@ app.post("/api/analyze-chart", async (req, res) => {
       };
     };
 
-    if (mockResponse || !aiClient) {
+    const hasAnyClient = !!(trendClient || momentumClient || volumeClient);
+
+    // If no real API client is initialized, block custom uploads with a descriptive, helpful error
+    if (!hasAnyClient && !mockResponse && !isSample) {
+      return res.status(400).json({
+        error: "Yapay zeka API anahtarı (GEMINI_API_KEY) tanımlı değil! Obyo AI şu an canlı modda çalışıyor ve gerçek zamanlı işlem analizleri yapmak üzere programlanmıştır. Lütfen Render panelinizdeki Ortam Değişkenleri (Environment Variables) kısmından GEMINI_API_KEY değişkenini ekleyin. Örnek hazır grafiklerle sistemi test etmek isterseniz de hemen aşağıdaki hazır hazır grafik kartlarını kullanabilirsiniz."
+      });
+    }
+
+    // Fallback to simulation if mock is explicitly requested, if we has no key but it is a sample, or to keep general compatibility
+    if (mockResponse || !hasAnyClient || isSample) {
       await new Promise(resolve => setTimeout(resolve, 1500));
       return res.json(generateSimulatedData());
     }
@@ -172,29 +193,55 @@ app.post("/api/analyze-chart", async (req, res) => {
       },
     };
 
-    // Helper function for querying a single specialized agent model in parallel
+    // Helper function for querying a single specialized agent model in parallel with proper distinct model aliases and fallback paths
     const queryAgentModel = async (
       agentName: string,
+      client: GoogleGenAI | null,
+      modelName: string,
+      fallbackModelName: string,
       rolePrompt: string,
       schema: any,
       fallbackData: any
     ) => {
       try {
-        console.log(`[GENAI] Querying Agent Model: ${agentName}...`);
-        const response = await aiClient!.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: [imagePart, { text: rolePrompt }],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-            temperature: 0.4,
-          },
-        });
-        const text = response.text?.trim();
-        if (!text) {
-          throw new Error(`Empty response returned from ${agentName}`);
+        if (!client) {
+          console.warn(`[GENAI] Client for ${agentName} is not initialized. Using fallback mock analysis.`);
+          return fallbackData;
         }
-        return JSON.parse(text);
+        console.log(`[GENAI] Querying Agent Model: ${agentName} using primary model: ${modelName}...`);
+        
+        try {
+          const response = await client.models.generateContent({
+            model: modelName,
+            contents: [imagePart, { text: rolePrompt }],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: schema,
+              temperature: 0.4,
+            },
+          });
+          const text = response.text?.trim();
+          if (!text) {
+            throw new Error(`Empty response returned from ${agentName} using ${modelName}`);
+          }
+          return JSON.parse(text);
+        } catch (modelErr) {
+          console.warn(`[GENAI] Primary model ${modelName} failed or lacks permission on your API tier. Trying fallback model ${fallbackModelName} for ${agentName}. Error:`, modelErr);
+          const response = await client.models.generateContent({
+            model: fallbackModelName,
+            contents: [imagePart, { text: rolePrompt }],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: schema,
+              temperature: 0.4,
+            },
+          });
+          const text = response.text?.trim();
+          if (!text) {
+            throw new Error(`Empty response returned from ${agentName} using fallback ${fallbackModelName}`);
+          }
+          return JSON.parse(text);
+        }
       } catch (err) {
         console.warn(`[GENAI] Failed to query ${agentName}, applying specialized fallback. Error:`, err);
         return fallbackData;
@@ -330,11 +377,14 @@ If it IS a valid chart, set "isValidChart" to true and analyze as **Volume AI**:
       required: ["isValidChart", "direction", "confidence", "reasoning", "volumeCondition"]
     };
 
-    // Execute all 3 specialized Technical Analysis AI Agent calls in parallel
+    // Execute all 3 specialized Technical Analysis AI Agent calls in parallel using 3 distinct models under the hood!
+    // Trend AI uses gemini-3.5-flash (Flagship visual/structural parsing)
+    // Momentum AI uses gemini-3.1-pro-preview (Advanced mathematical logic & indicators)
+    // Volume AI uses gemini-3.1-flash-lite (Fastest volume breakout processing)
     const [trendRes, momentumRes, volumeRes] = await Promise.all([
-      queryAgentModel("Trend AI", trendPrompt, trendSchema, getTrendAIFallback(simulatedIsUpward)),
-      queryAgentModel("Momentum AI", momentumPrompt, momentumSchema, getMomentumAIFallback(simulatedIsUpward)),
-      queryAgentModel("Volume AI", volumePrompt, volumeSchema, getVolumeAIFallback(simulatedIsUpward))
+      queryAgentModel("Trend AI", trendClient, "gemini-3.5-flash", "gemini-3.5-flash", trendPrompt, trendSchema, getTrendAIFallback(simulatedIsUpward)),
+      queryAgentModel("Momentum AI", momentumClient, "gemini-3.1-pro-preview", "gemini-3.5-flash", momentumPrompt, momentumSchema, getMomentumAIFallback(simulatedIsUpward)),
+      queryAgentModel("Volume AI", volumeClient, "gemini-3.1-flash-lite", "gemini-3.5-flash", volumePrompt, volumeSchema, getVolumeAIFallback(simulatedIsUpward))
     ]);
 
     // Consolidate validation check across models
